@@ -1,0 +1,98 @@
+import streamlit as st
+
+# 1. 페이지 설정
+st.set_page_config(page_title="Royal Vet Oncology Center", layout="wide")
+
+# 2. 디자인 (블랙 테마 & 네온 그린)
+st.markdown("""
+    <style>
+    .stApp { background-color: #000000; color: #ffffff; }
+    [data-testid="stSidebar"] { background-color: #111111; border-right: 1px solid #333; }
+    .stSelectbox, .stNumberInput, .stSlider { background-color: #1e1e1e !important; color: #ffffff !important; }
+    .result-card {
+        background-color: #151515;
+        padding: 25px;
+        border-radius: 15px;
+        border: 2px solid #00FFC8;
+        box-shadow: 0 0 15px rgba(0, 255, 200, 0.2);
+        margin-bottom: 20px;
+    }
+    h1, h2, h3 { color: #00FFC8 !important; }
+    .label-text { color: #888888; font-size: 14px; margin-bottom: 5px; }
+    .value-text { color: #ffffff; font-size: 32px; font-weight: bold; }
+    </style>
+    """, unsafe_allow_all_html=True)
+
+# 3. 약전 데이터베이스
+DRUGS = {
+    "로이나제주 (L-Asparaginase)": {"conc": 2000, "dose": 400, "unit": "IU/kg", "label": "IU", "vial": "10,000 IU/Vial", "diluent": "0.9% NaCl (5ml 희석 시 2000IU/ml)", "protocol": "전처치: Diphen(IM). SC/IM 권장. 췌장염 주의."},
+    "벨바스틴주 (Vinblastine)": {"conc": 1.0, "dose": 2.0, "unit": "mg/m2", "label": "mg", "vial": "10mg/Vial", "diluent": "0.9% NaCl", "protocol": "IV Bolus. Vesicant 주의. Vincristine보다 골수독성 강함."},
+    "빈크란주 (Vincristine)": {"conc": 1.0, "dose": 0.7, "unit": "mg/m2", "label": "mg", "vial": "1mg/Vial", "diluent": "0.9% NaCl", "protocol": "IV Bolus. Vesicant. 신경독성(장마비) 모니터링."},
+    "아드리아마이신 (Doxorubicin)": {"conc": 2.0, "dose": 30.0, "unit": "mg/m2", "label": "mg", "vial": "10mg/5ml", "diluent": "0.9% NaCl", "protocol": "전처치: Diphen+Dexa. 20분 저속 IV. 심독성 주의."},
+    "카보티놀주 (Carboplatin)": {"conc": 10.0, "dose": 300.0, "unit": "mg/m2", "label": "mg", "vial": "150mg/15ml", "diluent": "5% Dextrose (D5W) 필수", "protocol": "D5W 전용. NaCl 혼합 절대 금지. 신장수치 확인."},
+    "시타라빈주 (Cytarabine)": {"conc": 20.0, "dose": 100.0, "unit": "mg/m2", "label": "mg", "vial": "100mg/5ml", "diluent": "0.9% NaCl 또는 D5W", "protocol": "SC 또는 CRI 투여. 골수억제 주의."},
+    "엔독산주 (Cyclophosphamide)": {"conc": 20.0, "dose": 250.0, "unit": "mg/m2", "label": "mg", "vial": "500mg/Vial", "diluent": "0.9% NaCl", "protocol": "전처치: Furosemide 권장. 방광염 주의. 충분한 음수 유도."},
+    "미트론주 (Mitoxantrone)": {"conc": 2.0, "dose": 5.5, "unit": "mg/m2", "label": "mg", "vial": "20mg/10ml", "diluent": "0.9% NaCl", "protocol": "15분 IV. 소변색 변화(청록색) 가능성 고지."},
+    "카디옥산주 (Dexrazoxane)": {"conc": 10.0, "dose": 10.0, "unit": "ratio (10:1)", "label": "mg", "vial": "500mg/Vial", "diluent": "0.9% NaCl", "protocol": "목적: Dox 심독성 예방. Dox 투여 전 주입. Dox mg의 10배 용량."},
+    "박스루킨15주 (IL-2)": {"conc": 100.0, "dose": 100.0, "unit": "μg/head", "label": "μg", "vial": "100μg/1ml", "diluent": "0.9% NaCl", "protocol": "면역요법제. 발열 등 면역 반응 모니터링."}
+}
+
+# 4. 사이드바 - 환자 정보
+st.sidebar.title("🐾 환자 정보")
+breed = st.sidebar.radio("종 선택", ["Dog", "Cat"])
+weight = st.sidebar.number_input("체중 (kg)", min_value=0.1, value=10.0, step=0.1)
+
+k = 10.1 if breed == "Dog" else 10.0
+bsa = (k * (weight ** (2/3))) / 100
+st.sidebar.markdown(f"### BSA: **{bsa:.4f} m²**")
+
+# 5. 메인 화면
+st.title("🩺 Veterinary Chemo Dose Calculator")
+
+drug_name = st.selectbox("항암제 선택", list(DRUGS.keys()))
+drug = DRUGS[drug_name]
+
+col1, col2 = st.columns(2)
+with col1:
+    basis = st.radio("계산 기준", ["BSA(m2) 기준", "체중(kg) 기준"], 
+                    index=0 if "m2" in drug["unit"] else 1)
+    target = st.number_input(f"설정 용량 ({drug['unit']})", value=float(drug["dose"]))
+
+with col2:
+    reduction = st.select_slider("용량 조정 (Reduction %)", options=[50, 60, 70, 80, 90, 100], value=100)
+
+# 계산
+if "BSA" in basis:
+    total_val = bsa * target * (reduction / 100)
+    proc_str = f"{bsa:.4f} m² × {target} × {reduction}%"
+else:
+    total_val = weight * target * (reduction / 100)
+    proc_str = f"{weight} kg × {target} × {reduction}%"
+
+needed_ml = total_val / drug["conc"]
+
+# 6. 결과 출력
+st.markdown("---")
+res1, res2 = st.columns(2)
+
+with res1:
+    st.markdown(f"""
+    <div class="result-card">
+        <div class="label-text">최종 필요 용량</div>
+        <div class="value-text" style="color:#00FFC8;">{total_val:.3f} {drug['label']}</div>
+        <br>
+        <div class="label-text">실제 조제 볼륨</div>
+        <div class="value-text">{needed_ml:.2f} ml</div>
+        <div style="color:#666; font-size:12px; margin-top:10px;">산식: {proc_str} | 농도: {drug['conc']}{drug['label']}/ml</div>
+    </div>
+    """, unsafe_allow_all_html=True)
+
+with res2:
+    st.subheader("📋 Administration Protocol")
+    st.write(f"**희석액:** {drug['diluent']}")
+    st.info(drug["protocol"])
+
+if breed == "Dog" and weight < 10 and "BSA" in basis:
+    st.warning("⚠️ Small Dog Warning: 10kg 미만 소형견은 BSA 기준 시 독성 위험이 큽니다.")
+
+st.caption("Royal Vet Oncology Calculator v2.7 | GUIDED BY AAHA & VCOG-CTCAE v2")
